@@ -1,0 +1,114 @@
+service: ShortUrl
+
+plugins:
+  - serverless-pseudo-parameters # Use nice pseudo-params instead of 'Fn::' everywhere
+  - serverless-offline # Test functions locally
+  - serverless-domain-manager
+
+package:
+  exclude:
+    - mocks/**
+    - tests/**
+
+provider:
+  name: aws
+  runtime: nodejs10.x
+  stage: dev
+  region: us-west-2
+  timeout: 30 # High timeout to accomodate RDS cold starts.
+  apiKeys:
+    - "TestShortUrlKey-${self:custom.stage}"
+    - "SlalomURLKey-${self:custom.stage}"
+
+  environment:
+    STAGE: "${self:custom.stage}"
+    S3_BUCKET: "${self:custom.s3.bucket.name}"
+    URL: "https://${self:custom.s3.bucket.name}"
+
+  iamRoleStatements:
+    # Allow access to list of items in a bucket.
+    - Effect: "Allow"
+      Action:
+        - "s3:ListBucket"
+      Resource: 
+        - "arn:aws:s3:::${self:custom.s3.bucket.name}"
+    # Allow access to get and put new files into a bucket.
+    - Effect: "Allow"
+      Action:
+        - "s3:PutObject"
+        - "s3:GetObject"
+      Resource:
+        - "arn:aws:s3:::${self:custom.s3.bucket.name}/*"
+
+functions:
+  create:
+    handler: concerns/url/url-handler.create
+    events:
+      - http:
+          method: post
+          path: "/url" 
+          cors: true
+          private: true
+  batch:
+    handler: concerns/url/url-handler.batch
+    events:
+      - http:
+          method: post
+          path: "/batch" 
+          cors: true
+          private: true
+
+custom: 
+  stage: ${opt:stage, self:provider.stage}
+  s3:
+    bucket:
+      name: ${self:custom.s3.bucket.${self:custom.stage}}
+      dev: "dev.u.chhs.ca.gov"
+      prod: "u.chhs.ca.gov"
+  domain:
+    base: "api.u.chhs.ca.gov"
+    dev: "dev.${self:custom.domain.base}"
+    prod: "${self:custom.domain.base}"
+  customDomain:
+    domainName: "${self:custom.domain.${self:custom.stage}}"
+    stage: ${self:custom.stage}
+    createRoute53Record: true
+
+resources:
+  Resources:
+    S3Bucket:
+      Type: "AWS::S3::Bucket"
+      Properties:
+        BucketName: "${self:custom.s3.bucket.name}"
+        AccessControl: "PublicRead"
+        WebsiteConfiguration:
+          ErrorDocument : "400.html"
+          IndexDocument : "index.html"
+        CorsConfiguration:
+          CorsRules:
+            - AllowedOrigins:
+                - '*'
+              AllowedHeaders:
+                - '*'
+              AllowedMethods:
+                - GET
+                - PUT
+                - POST
+                - DELETE
+                - HEAD
+              MaxAge: 3000
+    S3BucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      DependsOn:
+        - S3Bucket
+      Properties:
+        Bucket: "${self:custom.s3.bucket.name}"
+        PolicyDocument:
+          Statement:
+            # - Sid: PublicReadForGetBucketObjects
+            - Sid: PublicReadGetObject
+              Effect: Allow
+              Principal: '*'
+              Action:
+                - s3:GetObject
+              Resource: "arn:aws:s3:::${self:custom.s3.bucket.name}/*"

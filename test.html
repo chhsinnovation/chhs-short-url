@@ -1,0 +1,114 @@
+<html lang="en">
+<head>
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.8.1/css/bulma.min.css">
+  <script defer src="https://use.fontawesome.com/releases/v5.3.1/js/all.js"></script>
+
+  <title>Short URL Test</title>
+
+</head>
+
+<body>
+
+  <section class="hero is-primary is-bold">
+    <div class="hero-body">
+      <div class="container">
+        <h1 class="title is-1">
+          CHHS Short URL Test
+        </h1>
+        <h2 class="subtitle is-3">
+          Demonstration of our URL shortener.
+        </h2>
+      </div>
+    </div>
+  </section>
+
+
+  <section class="section">
+    <div class="container">
+      <h3 class="title is-3">The Test</h3>
+      <p class="subtitle is-4">Shortens the URL.</p>
+      <form action="https://2ekl28e7i6.execute-api.us-west-2.amazonaws.com/dev/url" method="POST">
+        <div class="field">
+          <label class="label">
+            URL (must include <em>https://</em>)
+          </label>
+          <div class="control has-icons-left">
+            <input class="input" type="text" name="Url" placeholder="https://www.google.com" required>
+            <span class="icon is-small is-left">
+              <i class="fas fa-globe-americas"></i>
+            </span>
+          </div>
+        </div>
+        <button class="button is-link" type="submit">Shorten URL</button>
+      </form>
+      <div class="notification is-success is-light is-hidden" id="links"></div>
+    </div>
+  </section>
+
+
+
+  <script>
+    (() => {
+      // Pick relevant elements out of the HTML.
+      const form = document.querySelector('form');
+      const links = document.querySelector('#links');
+
+      form.onsubmit = e => {
+        // Stop the form submission from trying to go to a new page.
+        e.preventDefault();
+
+        // Prepare data to send to the API.
+        const data = {};
+        const formElements = Array.from(form);
+        formElements.map(input => (data[input.name] = input.value));
+
+        // Log what our lambda function will receive
+        console.log(JSON.stringify(data));
+
+        // Fetch from the API!
+        fetch(form.action, {
+          method: 'POST',
+          mode: 'cors',
+          cache: 'no-cache',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          redirect: 'follow',
+          referrerPolicy: 'no-referrer',
+          body: JSON.stringify(data)
+        })
+          .then(response => {
+            // If we get a bad response from the API, throw an error.
+            // We'll catch it at the bottom of the promise chain.
+            if (response.status >= 400 && response.status < 600) {
+              throw new Error("Invalid URL");
+            };
+            // Parse JSON.
+            return response.json();
+          })
+          .then(json => {
+            // Add successful responses to the links element.
+            console.log(json);
+            const p = document.createElement("p");
+            const a = document.createElement("a");
+            const link = `https://dev.u.chhs.ca.gov/${json.ShortKey}`;
+            a.href = link;
+            a.innerHTML = `<strong>${link}</strong>`;
+            a.target = "_blank";
+            p.appendChild(a);
+            const longUrl = document.createTextNode(` (${json.LongUrl})`);
+            p.appendChild(longUrl);
+            links.appendChild(p);
+            links.classList.remove("is-hidden");
+          }).catch(error => {
+            // Alert upon failure.
+            alert(error.message);
+          });
+      };
+    })();
+  </script>
+</body>
+</html>
